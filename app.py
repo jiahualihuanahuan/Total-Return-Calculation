@@ -10,7 +10,7 @@ st.markdown("Compare the performance of holding a stock vs. holding and keeping 
 
 # Initialize session state for ticker selection
 if "selected_ticker" not in st.session_state:
-    st.session_state.selected_ticker = "HYLD.TO, USCL.TO, QDAY.TO, TXF.TO"
+    st.session_state.selected_ticker = "HYLD.TO, USCL.TO, QDAY.NE, TXF.TO"
 
 # Sidebar for user inputs
 st.sidebar.header("Configuration")
