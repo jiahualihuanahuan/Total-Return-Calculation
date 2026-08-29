@@ -8,14 +8,40 @@ st.set_page_config(page_title="Total Return Calculator", layout="wide")
 st.title("ETF & Stock Total Return Calculator")
 st.markdown("Compare the performance of holding a stock vs. holding and keeping dividends as cash vs. fully reinvesting dividends (DRIP).")
 
+# Initialize session state for ticker selection
+if "selected_ticker" not in st.session_state:
+    st.session_state.selected_ticker = "HYLD.TO, USCL.TO, QDAY.TO, TXF.TO"
+
 # Sidebar for user inputs
 st.sidebar.header("Configuration")
+
+# Quick select buttons for popular Canadian covered call ETFs
+st.sidebar.subheader("Popular Covered Call ETFs")
+
+col1, col2, col3 = st.sidebar.columns(3)
+
+with col1:
+    if st.button("HYLD"):
+        st.session_state.selected_ticker = "HYLD.TO"
+    if st.button("HDIV"):
+        st.session_state.selected_ticker = "HDIV.TO"
+    if st.button("BMAX"):
+        st.session_state.selected_ticker = "BMAX.TO"
+
+with col2:
+    if st.button("HDIF"):
+        st.session_state.selected_ticker = "HDIF.TO"
+    if st.button("USCL"):
+        st.session_state.selected_ticker = "USCL.TO"
+    if st.button("QQCL"):
+        st.session_state.selected_ticker = "QQCL.TO"
+
+st.sidebar.divider()
+
 tickers_input = st.sidebar.text_input(
     "Enter Tickers (comma-separated)", 
-    "LMAX.TO, TXF.TO, ZWC.TO"
+    st.session_state.selected_ticker
 )
-start_date = st.sidebar.date_input("Start Date", pd.to_datetime("2020-01-01"))
-end_date = st.sidebar.date_input("End Date", pd.to_datetime("today"))
 initial_investment = st.sidebar.number_input("Initial Investment ($)", value=10000, step=1000)
 
 if st.sidebar.button("Calculate Performance"):
@@ -28,7 +54,7 @@ if st.sidebar.button("Calculate Performance"):
         # Fetch historical data (auto_adjust=False ensures we get raw prices and real dividend payouts)
         tkr = yf.Ticker(ticker)
         try:
-            hist = tkr.history(start=start_date, end=end_date, auto_adjust=False, actions=True)
+            hist = tkr.history(period="max", auto_adjust=False, actions=True)
         except Exception as e:
             st.error(f"Failed to download data for {ticker}: {e}")
             continue
