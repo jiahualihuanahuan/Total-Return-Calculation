@@ -1,75 +1,24 @@
-# ETF & Stock Total Return Calculator
+# 📈 ETF & Stock Total Return Calculator (DRIP)
 
-A Streamlit web application that calculates and visualizes the total return of stocks and ETFs over time, comparing three return scenarios: price appreciation only, dividends held as cash, and fully reinvested dividends (DRIP).
+A powerful, interactive Streamlit web application designed to visualize the true total return of stocks and ETFs. 
 
-## Overview
+While most financial charts default to showing simple price action, this tool calculates and compares three distinct investment strategies over time:
+1. **Price Only:** The standard chart of the asset's underlying price.
+2. **Dividends as Cash:** The asset's price plus the cumulative total of uninvested dividend payouts.
+3. **Reinvested Dividends (DRIP):** The true total return, simulating the compounding effect of automatically using dividend payouts to purchase fractional shares at that day's closing price.
 
-This tool helps investors understand the impact of dividend reinvestment on their portfolio returns. By comparing three scenarios:
+## ✨ Key Features
 
-1. **Price Only** - Capital gains from price appreciation
-2. **Dividends as Cash** - Capital gains + dividends kept as cash (not reinvested)
-3. **Reinvested Dividends (DRIP)** - Total return including dividend reinvestment for compounding effect
+* **⚖️ Fair Comparison Engine:** When comparing multiple tickers, the app automatically finds the **common available period**. It aligns all calculations to the inception date of the *newest* fund in your list, ensuring a 1:1 "apples-to-apples" comparison and preventing older funds from showing an unfair compounding advantage.
+* **📊 Interactive Plotly Charts:** Features a unified, hoverable comparison chart for DRIP returns across all selected tickers, alongside detailed drop-down breakdowns for each individual asset.
+* **🇨🇦 Quick-Select Presets:** Built-in sidebar buttons for popular high-yield Canadian Covered Call ETFs (e.g., HYLD, HDIV, USCL).
+* **🌐 Global Ticker Support:** Powered by Yahoo Finance, supporting US equities (e.g., `SPY`, `AAPL`) and international markets via standard suffixes (e.g., `.TO` for TSX).
 
-## Features
+## 🚀 Installation & Setup
 
-- **Multi-Ticker Support** - Compare multiple stocks/ETFs simultaneously
-- **Flexible Date Range** - Analyze performance over any custom time period
-- **Customizable Investment Amount** - See results for any initial investment
-- **Interactive Charts** - Plotly-based visualization with hover details
-- **Automatic Dividend Calculation** - Accurately calculates dividend payouts and reinvestment
-- **Fractional Share Support** - Handles dividend reinvestment as fractional shares
+To run this application locally, you will need Python installed on your machine. 
 
-## Requirements
-
-- Python 3.7+
-- streamlit
-- yfinance
-- pandas
-- plotly
-
-## Installation
-
-1. Clone the repository:
-```bash
-git clone <repository-url>
-cd total-return
-```
-
-2. Install dependencies:
-```bash
-pip install streamlit yfinance pandas plotly
-```
-
-## Usage
-
-1. Run the Streamlit app:
-```bash
-streamlit run app.py
-```
-
-2. The app will open in your browser at `http://localhost:8501`
-
-3. Configure your analysis in the sidebar:
-   - **Enter Tickers** - Comma-separated list of stock/ETF symbols (e.g., `LMAX.TO, TXF.TO, ZWC.TO`)
-   - **Start Date** - Beginning of the analysis period
-   - **End Date** - End of the analysis period
-   - **Initial Investment** - Amount to invest (default: $10,000)
-
-4. Click **Calculate Performance** to generate the analysis
-
-## How It Works
-
-- **Price Only**: Calculates portfolio value based solely on price changes
-- **Dividends as Cash**: Adds cumulative dividends to portfolio value without reinvesting
-- **Reinvested Dividends (DRIP)**: Automatically reinvests dividends to purchase additional shares at ex-dividend date prices, demonstrating the power of compounding
-
-## Example
-
-With $10,000 invested in `LMAX.TO` from 2020-01-01 to today, the app shows how much more you'd have if you reinvested dividends versus holding them as cash.
-
-## Data Source
-
-Historical stock and ETF data is fetched from Yahoo Finance via the `yfinance` library, including:
-- Adjusted and unadjusted prices
-- Dividend amounts and ex-dividend dates
-- Historical trading data
+1. **Clone the repository:**
+   ```bash
+   git clone [https://github.com/yourusername/Total-Return-Calculation.git](https://github.com/yourusername/Total-Return-Calculation.git)
+   cd Total-Return-Calculation
