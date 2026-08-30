@@ -44,55 +44,72 @@ tickers_input = st.sidebar.text_input(
 )
 initial_investment = st.sidebar.number_input("Initial Investment ($)", value=10000, step=1000)
 
-if st.sidebar.button("Calculate Performance"):
+# Calculate automatically whenever tickers exist in the text box
+if tickers_input:
     tickers = [t.strip().upper() for t in tickers_input.split(",") if t.strip()]
     
-    # Store processed data for individual and comparison charts
-    drip_comparison = {}
-    individual_histories = {}
+    # 1. Fetch raw data first to determine the common start date
+    raw_data = {}
+    with st.spinner("Fetching data from Yahoo Finance..."):
+        for ticker in tickers:
+            tkr = yf.Ticker(ticker)
+            try:
+                hist = tkr.history(period="max", auto_adjust=False, actions=True)
+                if not hist.empty:
+                    if 'Dividends' not in hist.columns:
+                        hist['Dividends'] = 0.0
+                    
+                    # Remove timezone info to prevent plotting alignment issues
+                    hist.index = hist.index.tz_localize(None) 
+                    raw_data[ticker] = hist[['Close', 'Dividends']].copy()
+                else:
+                    st.warning(f"⚠️ No pricing data found for {ticker}. It will be excluded.")
+            except Exception as e:
+                st.error(f"Failed to download data for {ticker}: {e}")
 
-    for ticker in tickers:
-        tkr = yf.Ticker(ticker)
-        try:
-            hist = tkr.history(period="max", auto_adjust=False, actions=True)
-        except Exception as e:
-            st.error(f"Failed to download data for {ticker}: {e}")
-            continue
-            
-        if hist.empty:
-            st.warning(f"No pricing data found for {ticker}.")
-            continue
-            
-        hist = hist[['Close', 'Dividends']].copy()
+    # 2. Proceed only if we have valid data
+    if raw_data:
+        # Find the latest start date among all valid tickers for a fair comparison
+        start_dates = [df.index.min() for df in raw_data.values()]
+        common_start_date = max(start_dates)
         
-        # 1. Price Only
-        initial_price = hist['Close'].iloc[0]
-        initial_shares = initial_investment / initial_price
-        hist['Price Only'] = hist['Close'] * initial_shares
+        st.info(f"🗓️ **Fair Comparison Mode:** All calculations are aligned to start on **{common_start_date.strftime('%Y-%m-%d')}** (the inception date of the newest selected fund).")
         
-        # 2. Dividends as Cash (Held, not reinvested)
-        hist['Cumulative Dividends Per Share'] = hist['Dividends'].cumsum()
-        hist['Dividends as Cash'] = hist['Price Only'] + (hist['Cumulative Dividends Per Share'] * initial_shares)
-        
-        # 3. Reinvested Dividends (DRIP)
-        current_shares = initial_shares
-        dr_shares_series = [current_shares]
-        
-        for i in range(1, len(hist)):
-            div_paid = hist['Dividends'].iloc[i] * current_shares
-            if div_paid > 0:
-                current_shares += (div_paid / hist['Close'].iloc[i])
-            dr_shares_series.append(current_shares)
-            
-        hist['DRIP Shares'] = dr_shares_series
-        hist['Reinvested Dividends'] = hist['Close'] * hist['DRIP Shares']
-        
-        # Save results
-        drip_comparison[ticker] = hist['Reinvested Dividends']
-        individual_histories[ticker] = hist
+        drip_comparison = {}
+        individual_histories = {}
 
-    # --- Comparison Section ---
-    if len(drip_comparison) > 1:
+        # 3. Process each ticker from the common start date
+        for ticker, hist in raw_data.items():
+            # Slice the dataframe to only include data from the common start date onwards
+            hist = hist[hist.index >= common_start_date].copy()
+            
+            if hist.empty:
+                continue
+                
+            # --- Perform Calculations ---
+            initial_price = hist['Close'].iloc[0]
+            initial_shares = initial_investment / initial_price
+            hist['Price Only'] = hist['Close'] * initial_shares
+            
+            hist['Cumulative Dividends Per Share'] = hist['Dividends'].cumsum()
+            hist['Dividends as Cash'] = hist['Price Only'] + (hist['Cumulative Dividends Per Share'] * initial_shares)
+            
+            current_shares = initial_shares
+            dr_shares_series = [current_shares]
+            
+            for i in range(1, len(hist)):
+                div_paid = hist['Dividends'].iloc[i] * current_shares
+                if div_paid > 0:
+                    current_shares += (div_paid / hist['Close'].iloc[i])
+                dr_shares_series.append(current_shares)
+                
+            hist['DRIP Shares'] = dr_shares_series
+            hist['Reinvested Dividends'] = hist['Close'] * hist['DRIP Shares']
+            
+            drip_comparison[ticker] = hist['Reinvested Dividends']
+            individual_histories[ticker] = hist
+
+        # --- COMPARISON SECTION (Always shows if at least 1 valid ticker exists) ---
         st.header("📊 Total Return Comparison (DRIP)")
         
         comp_fig = go.Figure()
@@ -105,29 +122,31 @@ if st.sidebar.button("Calculate Performance"):
             ))
             
         comp_fig.update_layout(
-            title=f"Total Return Comparison — Growth of ${initial_investment:,.2f}",
+            title=f"Total Return (DRIP) Comparison — Growth of ${initial_investment:,.2f}",
             yaxis_title="Portfolio Value ($)",
             xaxis_title="Date",
             hovermode="x unified",
-            margin=dict(l=0, r=0, t=40, b=0)
+            margin=dict(l=0, r=0, t=40, b=0),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
         )
         st.plotly_chart(comp_fig, use_container_width=True)
         st.divider()
 
-    # --- Individual Breakdowns ---
-    for ticker, hist in individual_histories.items():
-        st.subheader(f"Performance Breakdown: {ticker}")
-        
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=hist.index, y=hist['Price Only'], mode='lines', name='Price Only', line=dict(color='blue')))
-        fig.add_trace(go.Scatter(x=hist.index, y=hist['Dividends as Cash'], mode='lines', name='+ Dividends as Cash', line=dict(color='orange')))
-        fig.add_trace(go.Scatter(x=hist.index, y=hist['Reinvested Dividends'], mode='lines', name='+ Reinvested Dividends (Total Return)', line=dict(color='green')))
-        
-        fig.update_layout(
-            title=f"{ticker} — Growth of ${initial_investment:,.2f}",
-            yaxis_title="Portfolio Value ($)",
-            xaxis_title="Date",
-            hovermode="x unified",
-            margin=dict(l=0, r=0, t=40, b=0)
-        )
-        st.plotly_chart(fig, use_container_width=True)
+        # --- INDIVIDUAL BREAKDOWNS ---
+        for ticker, hist in individual_histories.items():
+            with st.expander(f"🔍 Detailed Breakdown: {ticker}", expanded=False):
+                fig = go.Figure()
+                fig.add_trace(go.Scatter(x=hist.index, y=hist['Price Only'], mode='lines', name='Price Only', line=dict(color='blue')))
+                fig.add_trace(go.Scatter(x=hist.index, y=hist['Dividends as Cash'], mode='lines', name='+ Dividends as Cash', line=dict(color='orange')))
+                fig.add_trace(go.Scatter(x=hist.index, y=hist['Reinvested Dividends'], mode='lines', name='+ Reinvested Dividends', line=dict(color='green')))
+                
+                fig.update_layout(
+                    title=f"{ticker} Internal Growth Dynamics",
+                    yaxis_title="Portfolio Value ($)",
+                    xaxis_title="Date",
+                    hovermode="x unified",
+                    margin=dict(l=0, r=0, t=40, b=0)
+                )
+                st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.error("Could not fetch data for any of the selected tickers.")
