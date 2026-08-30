@@ -28,7 +28,8 @@ if tickers_input:
                 if not hist.empty:
                     if 'Dividends' not in hist.columns:
                         hist['Dividends'] = 0.0
-                    hist.index = hist.index.tz_localize(None)
+                    if hist.index.tz is not None:
+                        hist.index = hist.index.tz_localize(None)
                     raw_data[ticker] = hist[['Close', 'Dividends']].copy()
                 else:
                     st.warning(f"⚠️ No data found for {ticker}.")
