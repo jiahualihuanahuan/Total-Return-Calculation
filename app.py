@@ -45,13 +45,13 @@ tickers_input = st.sidebar.text_input(
 initial_investment = st.sidebar.number_input("Initial Investment ($)", value=10000, step=1000)
 
 if st.sidebar.button("Calculate Performance"):
-    # Clean up the ticker list
     tickers = [t.strip().upper() for t in tickers_input.split(",") if t.strip()]
     
+    # Store processed data for individual and comparison charts
+    drip_comparison = {}
+    individual_histories = {}
+
     for ticker in tickers:
-        st.subheader(f"Performance: {ticker}")
-        
-        # Fetch historical data (auto_adjust=False ensures we get raw prices and real dividend payouts)
         tkr = yf.Ticker(ticker)
         try:
             hist = tkr.history(period="max", auto_adjust=False, actions=True)
@@ -60,10 +60,9 @@ if st.sidebar.button("Calculate Performance"):
             continue
             
         if hist.empty:
-            st.warning(f"No pricing data found for {ticker} in the selected date range.")
+            st.warning(f"No pricing data found for {ticker}.")
             continue
             
-        # Ensure we only work with the necessary columns
         hist = hist[['Close', 'Dividends']].copy()
         
         # 1. Price Only
@@ -79,18 +78,46 @@ if st.sidebar.button("Calculate Performance"):
         current_shares = initial_shares
         dr_shares_series = [current_shares]
         
-        # Loop through days to calculate fractional share accumulation on ex-div dates
         for i in range(1, len(hist)):
             div_paid = hist['Dividends'].iloc[i] * current_shares
             if div_paid > 0:
-                # Buy more shares at that day's closing price
                 current_shares += (div_paid / hist['Close'].iloc[i])
             dr_shares_series.append(current_shares)
             
         hist['DRIP Shares'] = dr_shares_series
         hist['Reinvested Dividends'] = hist['Close'] * hist['DRIP Shares']
         
-        # Build the Plotly chart
+        # Save results
+        drip_comparison[ticker] = hist['Reinvested Dividends']
+        individual_histories[ticker] = hist
+
+    # --- Comparison Section ---
+    if len(drip_comparison) > 1:
+        st.header("📊 Total Return Comparison (DRIP)")
+        
+        comp_fig = go.Figure()
+        for ticker, series in drip_comparison.items():
+            comp_fig.add_trace(go.Scatter(
+                x=series.index, 
+                y=series, 
+                mode='lines', 
+                name=ticker
+            ))
+            
+        comp_fig.update_layout(
+            title=f"Total Return Comparison — Growth of ${initial_investment:,.2f}",
+            yaxis_title="Portfolio Value ($)",
+            xaxis_title="Date",
+            hovermode="x unified",
+            margin=dict(l=0, r=0, t=40, b=0)
+        )
+        st.plotly_chart(comp_fig, use_container_width=True)
+        st.divider()
+
+    # --- Individual Breakdowns ---
+    for ticker, hist in individual_histories.items():
+        st.subheader(f"Performance Breakdown: {ticker}")
+        
         fig = go.Figure()
         fig.add_trace(go.Scatter(x=hist.index, y=hist['Price Only'], mode='lines', name='Price Only', line=dict(color='blue')))
         fig.add_trace(go.Scatter(x=hist.index, y=hist['Dividends as Cash'], mode='lines', name='+ Dividends as Cash', line=dict(color='orange')))
