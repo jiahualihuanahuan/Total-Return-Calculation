@@ -2,19 +2,42 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import plotly.graph_objects as go
+from datetime import timedelta
 
 # Streamlit Page Configuration
 st.set_page_config(page_title="Total Return Calculator", layout="wide")
 st.title("ETF & Stock Total Return Calculator")
 st.markdown("Compare the performance of holding a stock vs. holding and keeping dividends as cash vs. fully reinvesting dividends (DRIP).")
 
-# Initialize session state for ticker selection
+# ==========================================
+# 💾 CACHED DATA FETCHER
+# ==========================================
+# ttl="1d" keeps the downloaded data in memory for 1 day. 
+# It will only call yfinance again tomorrow, or if a NEW ticker is requested.
+@st.cache_data(ttl="1d", show_spinner=False)
+def fetch_ticker_data(ticker_symbol):
+    tkr = yf.Ticker(ticker_symbol)
+    hist = tkr.history(period="max", auto_adjust=False, actions=True)
+    
+    if hist.empty:
+        return None
+        
+    if 'Dividends' not in hist.columns:
+        hist['Dividends'] = 0.0
+        
+    # Remove timezone info to prevent plotting alignment crashes
+    if hist.index.tz is not None:
+        hist.index = hist.index.tz_localize(None)
+        
+    return hist[['Close', 'Dividends']].copy()
+
+# ==========================================
+# UI AND CONFIGURATION
+# ==========================================
 if "selected_ticker" not in st.session_state:
     st.session_state.selected_ticker = "HYLD.TO, USCL.TO, QDAY.NE, TXF.TO"
 
-# Sidebar for user inputs
 st.sidebar.header("Configuration")
-
 st.sidebar.subheader("Popular Covered Call ETFs")
 col1, col2, col3 = st.sidebar.columns(3)
 
@@ -42,37 +65,33 @@ tickers_input = st.sidebar.text_input(
 )
 initial_investment = st.sidebar.number_input("Initial Investment ($)", value=10000, step=1000)
 
+# ==========================================
+# MAIN EXECUTION
+# ==========================================
 if tickers_input:
     tickers = [t.strip().upper() for t in tickers_input.split(",") if t.strip()]
     
     raw_data = {}
-    with st.spinner("Fetching data from Yahoo Finance..."):
+    with st.spinner("Loading data (using local cache if available)..."):
         for ticker in tickers:
-            tkr = yf.Ticker(ticker)
             try:
-                hist = tkr.history(period="max", auto_adjust=False, actions=True)
-                if not hist.empty:
-                    if 'Dividends' not in hist.columns:
-                        hist['Dividends'] = 0.0
-                    
-                    # Remove timezone info to prevent plotting alignment crashes
-                    if hist.index.tz is not None:
-                        hist.index = hist.index.tz_localize(None)
-                        
-                    raw_data[ticker] = hist[['Close', 'Dividends']].copy()
+                # Call our new cached function
+                hist = fetch_ticker_data(ticker)
+                
+                if hist is not None:
+                    raw_data[ticker] = hist
                 else:
                     st.warning(f"⚠️ No pricing data found for {ticker}.")
             except Exception as e:
-                st.error(f"Failed to download data for {ticker}: {e}")
+                st.error(f"Failed to fetch data for {ticker}: {e}")
 
     if raw_data:
-        # 1. Find common start date so older funds don't have an unfair advantage
+        # 1. Find common start date
         start_dates = [df.index.min() for df in raw_data.values()]
         common_start_date = max(start_dates)
         
-        st.info(f"🗓️ **Fair Comparison Mode:** All charts start on **{common_start_date.strftime('%Y-%m-%d')}** (the inception date of the newest selected fund).")
+        st.info(f"🗓️ **Fair Comparison Mode:** All charts start on **{common_start_date.strftime('%Y-%m-%d')}** (the inception date of the newest selected fund). Data is cached to prevent rate-limiting.")
         
-        # Dictionaries to store data for plotting outside the loop
         drip_comparison = {}
         individual_histories = {}
 
@@ -101,7 +120,6 @@ if tickers_input:
             hist['DRIP Shares'] = dr_shares_series
             hist['Reinvested Dividends'] = hist['Close'] * hist['DRIP Shares']
             
-            # Store the final DRIP series and the full history
             drip_comparison[ticker] = hist['Reinvested Dividends']
             individual_histories[ticker] = hist
 
@@ -139,7 +157,6 @@ if tickers_input:
         # ==========================================
         st.header("🔍 Individual Breakdown (Price vs. Cash vs. DRIP)")
         for ticker, hist in individual_histories.items():
-            # Using an expander so it doesn't clutter the screen, click to open
             with st.expander(f"Show details for {ticker}", expanded=False):
                 fig = go.Figure()
                 fig.add_trace(go.Scatter(x=hist.index, y=hist['Price Only'], mode='lines', name='Price Only', line=dict(color='blue')))
